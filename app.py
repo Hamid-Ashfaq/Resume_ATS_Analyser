@@ -106,7 +106,10 @@ def extract_resume_text(uploaded_file) -> str:
     raise ValueError("Unsupported file type. Please upload a PDF or DOCX resume.")
 
 
-def get_api_key() -> str:
+def get_api_key(user_api_key: str = "") -> str:
+    if user_api_key.strip():
+        return user_api_key.strip()
+
     # Prefer Streamlit Cloud secrets; fall back to local environment variable.
     try:
         if "GEMINI_API_KEY" in st.secrets:
@@ -142,12 +145,14 @@ def basic_resume_metrics(text: str) -> dict:
     }
 
 
-def analyze_with_gemini(resume_text: str, job_description: str) -> ResumeAnalysis:
-    api_key = get_api_key()
+def analyze_with_gemini(
+    resume_text: str, job_description: str, user_api_key: str = ""
+) -> ResumeAnalysis:
+    api_key = get_api_key(user_api_key)
     if not api_key:
         raise RuntimeError(
-            "GEMINI_API_KEY is not configured. Add it to Streamlit secrets "
-            "or set it as an environment variable."
+            "Add your Gemini API key in the sidebar, or configure GEMINI_API_KEY "
+            "in Streamlit secrets or as an environment variable."
         )
 
     client = genai.Client(api_key=api_key)
@@ -205,7 +210,7 @@ RESUME:
 """
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -225,12 +230,18 @@ RESUME:
 # -----------------------------
 with st.sidebar:
     st.header("⚙️ Analysis Settings")
+    api_key_input = st.text_input(
+        "Gemini API key",
+        type="password",
+        placeholder="Paste your Gemini API key",
+        help="Your key is used for this session and is not displayed.",
+    )
     st.info(
         "For the most useful ATS score, paste the job description. "
         "Without one, the score reflects general ATS-readiness."
     )
     st.markdown("**Supported formats:** PDF, DOCX")
-    st.markdown("**Model:** Gemini 2.5 Flash")
+    st.markdown("**Model:** Gemini 3.5 Flash")
 
 # -----------------------------
 # Main input
@@ -269,7 +280,9 @@ if analyze_button:
                 )
                 st.stop()
 
-            analysis = analyze_with_gemini(resume_text, job_description)
+            analysis = analyze_with_gemini(
+                resume_text, job_description, api_key_input
+            )
 
         except Exception as exc:
             st.error(f"Analysis failed: {exc}")
